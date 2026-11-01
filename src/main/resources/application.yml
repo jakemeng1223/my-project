@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: life-db
+  datasource:
+    # 开发阶段用 H2 文件数据库，数据存在项目下的 data/ 目录，不用装 MySQL
+    url: jdbc:h2:file:./data/lifedb
+    username: sa
+    password:
+  jpa:
+    # 启动时根据实体类自动建表、加字段（只适合开发阶段）
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  h2:
+    console:
+      # 浏览器打开 /h2-console 可以直接看数据库里的数据
+      enabled: true
+
+server:
+  port: 8080
+
+---
+# 切换到 MySQL：启动时加参数 --spring.profiles.active=mysql
+spring:
+  config:
+    activate:
+      on-profile: mysql
+  datasource:
+    url: jdbc:mysql://localhost:3306/lifedb?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+  h2:
+    console:
+      enabled: false

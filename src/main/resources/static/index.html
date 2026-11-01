@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14120f" media="(prefers-color-scheme: dark)">
+  <title>人生数据库</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    /* ---------- 统计 ---------- */
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    @media (max-width: 420px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .stat { padding: 4px 2px; }
+    .stat b { display: block; font: 700 26px/1.1 var(--serif); }
+    .stat b em { font: 400 13px var(--sans); font-style: normal; color: var(--ink-soft); margin-left: 2px; }
+    .stat span { font-size: 12px; color: var(--ink-soft); }
+    .stat.streak b { color: var(--seal); }
+
+    /* ---------- 热力图 ---------- */
+    .heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 1fr); gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+    .heat button {
+      width: 100%; min-width: 14px; aspect-ratio: 1;
+      border: 0; padding: 0; border-radius: 4px;
+      background: var(--track);
+      cursor: pointer;
+    }
+    .heat button.future { visibility: hidden; }
+    .heat button.today { outline: 2px solid var(--seal); outline-offset: 1px; }
+    .heat button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+    .legend { display: flex; align-items: center; gap: 3px; margin-top: 10px; font-size: 12px; color: var(--ink-faint); }
+    .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    .legend .gap { flex: 1; }
+
+    /* ---------- 睡眠时间带 ---------- */
+    .bands { display: grid; grid-template-columns: 34px 1fr; gap: 6px; }
+    .axis { position: relative; height: 200px; font-size: 10px; color: var(--ink-faint); }
+    .axis span { position: absolute; right: 0; transform: translateY(-50%); }
+    .cols { position: relative; height: 200px; display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; }
+    .cols .guide { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); pointer-events: none; }
+    .cols .guide.goal { border-top: 1.5px dashed var(--seal); opacity: .55; }
+    .col { position: relative; border-radius: 6px; background: color-mix(in srgb, var(--track) 55%, transparent); cursor: pointer; border: 0; padding: 0; }
+    .col i { position: absolute; left: 18%; right: 18%; border-radius: 99px; background: var(--sleep); }
+    .col.late i { background: var(--seal); }
+    .col.today { box-shadow: inset 0 0 0 1.5px var(--seal); }
+    .days { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; margin: 4px 0 0 40px; font-size: 10px; color: var(--ink-faint); text-align: center; }
+    .band-note { margin-top: 10px; font-size: 12px; color: var(--ink-faint); display: flex; gap: 14px; flex-wrap: wrap; }
+    .band-note i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+    /* ---------- 表单 ---------- */
+    .date-row { display: flex; align-items: center; gap: 10px; }
+    .date-row input { flex: 1; }
+    .date-row button {
+      flex: none; width: 42px; height: 44px;
+      border: 1px solid var(--line); border-radius: 10px;
+      background: var(--paper); cursor: pointer; font-size: 18px;
+    }
+    .status { font-size: 12px; color: var(--ink-faint); margin-top: 6px; }
+
+    .sleep-calc { margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-soft); }
+    .sleep-calc .bar { flex: 1; }
+
+    .moods { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px; }
+    .moods button {
+      height: 40px;
+      border: 2px solid transparent;
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--c) 22%, var(--card));
+      color: var(--ink);
+      font-weight: 600; font-size: 14px;
+      cursor: pointer;
+      transition: transform .12s, background .12s;
+    }
+    .moods button:hover { transform: translateY(-1px); }
+    .moods button[aria-pressed="true"] { background: var(--c); color: #fff; border-color: color-mix(in srgb, var(--c) 70%, #000); transform: translateY(-2px); }
+    .mood-word { margin-top: 6px; font-size: 13px; color: var(--ink-soft); min-height: 1.4em; }
+
+    /* ---------- 睡眠条 ---------- */
+    .bar { position: relative; height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; }
+    .bar i { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: var(--sleep); }
+    .bar.late i { background: var(--seal); }
+    .ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-faint); margin-top: 3px; }
+
+    /* ---------- 时间线 ---------- */
+    .timeline { list-style: none; margin: 0; padding: 0; }
+    .entry {
+      display: grid; grid-template-columns: 52px 1fr; gap: 14px;
+      padding: 14px 0;
+      border-top: 1px dashed var(--line);
+      cursor: pointer;
+    }
+    .entry:first-child { border-top: 0; padding-top: 2px; }
+    .entry:hover .day { color: var(--seal); }
+    .when { text-align: center; }
+    .day { font: 700 24px/1 var(--serif); transition: color .15s; }
+    .wk { font-size: 12px; color: var(--ink-faint); margin-top: 4px; }
+    .ym { font-size: 11px; color: var(--ink-faint); }
+    .body { min-width: 0; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .chip.mood { background: var(--c); border-color: transparent; color: #fff; font-weight: 600; }
+    .entry .text { margin: 8px 0 0; white-space: pre-wrap; word-break: break-word; }
+    .entry .note { margin: 6px 0 0; padding-left: 10px; border-left: 2px solid var(--line); color: var(--ink-soft); font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+    .month {
+      margin: 18px 0 4px;
+      font: 600 13px var(--serif);
+      color: var(--ink-faint);
+      letter-spacing: .2em;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .month::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+    .month:first-child { margin-top: 0; }
+
+    .empty { text-align: center; padding: 28px 8px; color: var(--ink-soft); }
+    .empty .seal { margin: 0 auto 12px; opacity: .85; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="seal" aria-hidden="true">录</div>
+    <div class="title">
+      <h1>人生数据库</h1>
+      <p id="today"></p>
+    </div>
+    <nav class="nav" aria-label="页面">
+      <a href="/" aria-current="page">日记</a>
+      <a href="/matrix.html">矩阵</a>
+    </nav>
+  </header>
+  <p class="nudge" id="nudge" hidden></p>
+
+  <div class="grid">
+    <div class="side">
+      <section class="card" aria-labelledby="statsTitle">
+        <h2 id="statsTitle">概览 <small>最近 7 天</small></h2>
+        <div class="stats">
+          <div class="stat streak"><b id="streak">0<em>天</em></b><span>连续记录</span></div>
+          <div class="stat"><b id="total">0<em>天</em></b><span>累计记录</span></div>
+          <div class="stat"><b id="avgSleep">–</b><span>平均睡眠</span></div>
+          <div class="stat"><b id="avgMood">–</b><span>平均情绪</span></div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="heatTitle">
+        <h2 id="heatTitle">情绪日历 <small>近 16 周 · 点格子查看那天</small></h2>
+        <div class="heat" id="heat"></div>
+        <div class="legend">
+          <span>低落</span>
+          <i style="background:var(--m1)"></i><i style="background:var(--m3)"></i><i style="background:var(--m5)"></i>
+          <i style="background:var(--m7)"></i><i style="background:var(--m9)"></i><i style="background:var(--m10)"></i>
+          <span>很好</span><span class="gap"></span>
+          <i style="background:var(--track)"></i><span>未记录</span>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="bandTitle">
+        <h2 id="bandTitle">睡眠时间带 <small>近 14 天 · 越往上睡得越早</small></h2>
+        <div class="bands">
+          <div class="axis" id="bandAxis"></div>
+          <div class="cols" id="bandCols"></div>
+        </div>
+        <div class="days" id="bandDays"></div>
+        <div class="band-note">
+          <span><i style="background:var(--sleep)"></i>睡眠</span>
+          <span><i style="background:var(--seal)"></i>凌晨 3 点后才睡</span>
+          <span><i style="border-top:1.5px dashed var(--seal);height:0;border-radius:0"></i>23:30 目标线</span>
+        </div>
+      </section>
+    </div>
+
+    <div>
+      <form class="card" id="form" novalidate>
+        <h2>记一笔 <small id="formMode">新的一天</small></h2>
+
+        <div class="field">
+          <label for="recordDate">日期</label>
+          <div class="date-row">
+            <button type="button" id="prevDay" aria-label="前一天">‹</button>
+            <input type="date" id="recordDate" required>
+            <button type="button" id="nextDay" aria-label="后一天">›</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="pair">
+            <div><label for="sleepTime">几点睡</label><input type="time" id="sleepTime"></div>
+            <div><label for="wakeTime">几点起</label><input type="time" id="wakeTime"></div>
+          </div>
+          <div class="sleep-calc" id="sleepCalc" hidden>
+            <span id="sleepDur"></span>
+            <div class="bar" id="sleepBar"><i></i></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="label" id="moodLabel">情绪</span>
+          <div class="moods" id="moods" role="group" aria-labelledby="moodLabel"></div>
+          <div class="mood-word" id="moodWord">点一个数字，1 最低落，10 最好</div>
+        </div>
+
+        <div class="field">
+          <div class="pair">
+            <div><label for="spending">开销（元）</label><input type="number" id="spending" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
+            <div><label for="meals">吃了什么</label><input type="text" id="meals" maxlength="500" placeholder="鸭血粉丝汤…"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="activities">今天做了什么</label>
+          <textarea id="activities" maxlength="2000" placeholder="无聊的日子也值得记下来"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="note">一闪而过的念头</label>
+          <textarea id="note" maxlength="2000" placeholder="为什么这么选，当时怎么想的"></textarea>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="primary">保 存</button>
+          <button type="button" class="ghost" id="deleteBtn" hidden>删除</button>
+        </div>
+      </form>
+
+      <section class="card" aria-labelledby="listTitle">
+        <h2 id="listTitle">时间线 <small>点一条可以修改</small></h2>
+        <div id="list"></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const FIELDS = ['sleepTime', 'wakeTime', 'spending', 'meals', 'activities', 'note'];
+  const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+  const MOOD_WORDS = ['', '很低落', '低落', '有点丧', '一般偏下', '一般', '还可以', '不错', '挺好', '很好', '非常好'];
+  const HEAT_WEEKS = 16;
+  // 睡眠条的时间轴从 20:00 到第二天 20:00
+  const AXIS_START = 20 * 60;
+
+  let records = new Map();
+  let mood = null;
+
+  /* ---------- 日期工具 ---------- */
+  const pad = n => String(n).padStart(2, '0');
+  const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
+  const todayIso = () => iso(new Date());
+  const minutes = t => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
+  function sleepSpan(sleep, wake) {
+    const s = minutes(sleep), w = minutes(wake);
+    if (s == null || w == null) return null;
+    let dur = w - s;
+    if (dur <= 0) dur += 1440;
+    return { start: s, dur };
+  }
+  const fmtDur = m => `${Math.floor(m / 60)} 小时${m % 60 ? ` ${m % 60} 分` : ''}`;
+  const fmtHours = m => (m / 60).toFixed(1);
+
+  function paintBar(bar, sleep, wake) {
+    const span = sleepSpan(sleep, wake);
+    const fill = bar.querySelector('i');
+    if (!span) { fill.style.width = '0'; return; }
+    const offset = (span.start - AXIS_START + 1440) % 1440;
+    fill.style.left = `${offset / 1440 * 100}%`;
+    fill.style.width = `${Math.min(span.dur, 1440 - offset) / 1440 * 100}%`;
+    // 凌晨 3 点以后才睡，标成红色
+    bar.classList.toggle('late', isLate(span.start));
+  }
+
+  const moodColor = m => m ? `var(--m${m})` : 'var(--track)';
+
+  /* ---------- 提示 ---------- */
+  let toastTimer;
+  function toast(text, isError) {
+    const el = $('toast');
+    el.textContent = text;
+    el.className = 'toast show' + (isError ? ' error' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.className = 'toast', 2200);
+  }
+
+  /* ---------- 页头 ---------- */
+  function renderHeader() {
+    const now = new Date();
+    $('today').textContent = `${now.getMonth() + 1} 月 ${now.getDate()} 日 · 星期${WEEK[now.getDay()]}`;
+    const h = now.getHours();
+    const nudge = $('nudge');
+    if (h >= 0 && h < 5) {
+      nudge.textContent = `已经凌晨 ${h} 点了。记完这一笔，就去睡吧。`;
+      nudge.hidden = false;
+    }
+  }
+
+  /* ---------- 情绪按钮 ---------- */
+  function renderMoods() {
+    const box = $('moods');
+    for (let i = 1; i <= 10; i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = i;
+      b.style.setProperty('--c', `var(--m${i})`);
+      b.setAttribute('aria-pressed', 'false');
+      b.setAttribute('aria-label', `情绪 ${i} 分，${MOOD_WORDS[i]}`);
+      b.addEventListener('click', () => setMood(mood === i ? null : i));
+      box.append(b);
+    }
+  }
+  function setMood(m) {
+    mood = m;
+    [...$('moods').children].forEach((b, i) => b.setAttribute('aria-pressed', String(i + 1 === m)));
+    $('moodWord').textContent = m ? `${m} 分 · ${MOOD_WORDS[m]}` : '点一个数字，1 最低落，10 最好';
+  }
+
+  /* ---------- 睡眠计算 ---------- */
+  function updateSleepCalc() {
+    const span = sleepSpan($('sleepTime').value, $('wakeTime').value);
+    $('sleepCalc').hidden = !span;
+    if (!span) return;
+    $('sleepDur').textContent = `睡了 ${fmtDur(span.dur)}`;
+    paintBar($('sleepBar'), $('sleepTime').value, $('wakeTime').value);
+  }
+
+  /* ---------- 表单 ---------- */
+  function loadDate(date, scroll) {
+    $('recordDate').value = date;
+    const r = records.get(date);
+    for (const f of FIELDS) {
+      let v = r?.[f] ?? '';
+      if ((f === 'sleepTime' || f === 'wakeTime') && v) v = v.slice(0, 5);
+      $(f).value = v;
+    }
+    setMood(r?.mood ?? null);
+    updateSleepCalc();
+    $('deleteBtn').hidden = !r;
+    $('formMode').textContent = r ? '修改这天的记录' : (date === todayIso() ? '今天' : '补记这一天');
+    if (scroll) $('form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    const date = $('recordDate').value;
+    if (!date) { toast('先选一个日期', true); return; }
+    const body = { mood };
+    for (const f of FIELDS) {
+      const v = $(f).value.trim();
+      body[f] = v === '' ? null : v;
+    }
+    try {
+      const res = await fetch(`/api/records/${date}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast(err.detail || '保存失败', true);
+        return;
+      }
+      toast(date === todayIso() ? '记下了 ✓ 今天也算数' : '记下了 ✓');
+      await refresh();
+      loadDate(date);
+    } catch {
+      toast('连不上服务器，程序启动了吗？', true);
+    }
+  }
+
+  async function remove() {
+    const date = $('recordDate').value;
+    if (!confirm(`确定删除 ${date} 的记录吗？删了就找不回来了。`)) return;
+    const res = await fetch(`/api/records/${date}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast('已删除');
+      await refresh();
+      loadDate(date);
+    } else {
+      toast('删除失败', true);
+    }
+  }
+
+  /* ---------- 统计 ---------- */
+  function renderStats() {
+    const today = todayIso();
+    // 今天还没记的话，从昨天开始往前数，不算断
+    let day = records.has(today) ? today : addDays(today, -1);
+    let streak = 0;
+    while (records.has(day)) { streak++; day = addDays(day, -1); }
+    $('streak').innerHTML = '';
+    $('streak').append(String(streak), Object.assign(document.createElement('em'), { textContent: '天' }));
+    $('total').innerHTML = '';
+    $('total').append(String(records.size), Object.assign(document.createElement('em'), { textContent: '天' }));
+
+    const weekAgo = addDays(today, -6);
+    const recent = [...records.values()].filter(r => r.recordDate >= weekAgo && r.recordDate <= today);
+    const durs = recent.map(r => sleepSpan(r.sleepTime, r.wakeTime)?.dur).filter(Boolean);
+    const moods = recent.map(r => r.mood).filter(m => m != null);
+
+    const avgSleep = $('avgSleep');
+    avgSleep.innerHTML = '';
+    if (durs.length) avgSleep.append(fmtHours(durs.reduce((a, b) => a + b) / durs.length), Object.assign(document.createElement('em'), { textContent: '时' }));
+    else avgSleep.textContent = '–';
+    $('avgMood').textContent = moods.length ? (moods.reduce((a, b) => a + b) / moods.length).toFixed(1) : '–';
+  }
+
+  /* ---------- 热力图 ---------- */
+  function renderHeat() {
+    const heat = $('heat');
+    heat.replaceChildren();
+    const today = todayIso();
+    const t = parse(today);
+    // 从 HEAT_WEEKS 周前的星期日开始
+    const start = addDays(today, -(t.getDay() + (HEAT_WEEKS - 1) * 7));
+    for (let i = 0; i < HEAT_WEEKS * 7; i++) {
+      const date = addDays(start, i);
+      const b = document.createElement('button');
+      b.type = 'button';
+      if (date > today) { b.className = 'future'; b.tabIndex = -1; heat.append(b); continue; }
+      const r = records.get(date);
+      if (r) b.style.background = r.mood ? moodColor(r.mood) : 'var(--ink-faint)';
+      if (date === today) b.classList.add('today');
+      b.title = r ? `${date} · ${r.mood ? `情绪 ${r.mood}` : '已记录'}` : `${date} · 未记录`;
+      b.setAttribute('aria-label', b.title);
+      b.addEventListener('click', () => loadDate(date, true));
+      heat.append(b);
+    }
+  }
+
+  /* ---------- 睡眠时间带 ---------- */
+  const isLate = start => start >= 3 * 60 && start < 12 * 60;
+  const axisPct = mins => ((mins - AXIS_START + 1440) % 1440) / 1440 * 100;
+
+  function renderBands() {
+    const axis = $('bandAxis'), cols = $('bandCols'), days = $('bandDays');
+    if (!axis.childElementCount) {
+      for (const [label, h] of [['20:00', 20], ['00:00', 0], ['04:00', 4], ['08:00', 8], ['12:00', 12], ['16:00', 16]]) {
+        const s = document.createElement('span');
+        s.textContent = label;
+        s.style.top = `${axisPct(h * 60)}%`;
+        axis.append(s);
+      }
+    }
+    cols.replaceChildren();
+    days.replaceChildren();
+    for (const h of [0, 4, 8, 12, 16]) {
+      const g = document.createElement('div');
+      g.className = 'guide';
+      g.style.top = `${axisPct(h * 60)}%`;
+      cols.append(g);
+    }
+    const goal = document.createElement('div');
+    goal.className = 'guide goal';
+    goal.style.top = `${axisPct(23 * 60 + 30)}%`;
+    cols.append(goal);
+
+    const today = todayIso();
+    for (let i = 13; i >= 0; i--) {
+      const date = addDays(today, -i);
+      const r = records.get(date);
+      const col = document.createElement('button');
+      col.type = 'button';
+      col.className = 'col' + (date === today ? ' today' : '');
+      const span = r && sleepSpan(r.sleepTime, r.wakeTime);
+      if (span) {
+        const top = axisPct(span.start);
+        const bar = document.createElement('i');
+        bar.style.top = `${top}%`;
+        bar.style.height = `${Math.min(span.dur / 1440 * 100, 100 - top)}%`;
+        if (isLate(span.start)) col.classList.add('late');
+        col.append(bar);
+        col.title = `${date} · ${r.sleepTime.slice(0, 5)} 睡，${r.wakeTime.slice(0, 5)} 起，${fmtDur(span.dur)}`;
+      } else {
+        col.title = `${date} · 没有睡眠记录`;
+      }
+      col.setAttribute('aria-label', col.title);
+      col.addEventListener('click', () => loadDate(date, true));
+      cols.append(col);
+      days.append(Object.assign(document.createElement('span'), { textContent: parse(date).getDate() }));
+    }
+  }
+
+  /* ---------- 时间线 ---------- */
+  function chip(text, cls, color) {
+    const c = document.createElement('span');
+    c.className = 'chip' + (cls ? ` ${cls}` : '');
+    if (color) c.style.setProperty('--c', color);
+    c.textContent = text;
+    return c;
+  }
+
+  function renderList() {
+    const list = $('list');
+    list.replaceChildren();
+    const sorted = [...records.values()].sort((a, b) => b.recordDate.localeCompare(a.recordDate));
+    if (!sorted.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.innerHTML = '<div class="seal" aria-hidden="true">始</div>还没有记录。<br>第一笔，从今天开始。';
+      list.append(empty);
+      return;
+    }
+    let month = '';
+    let ul;
+    for (const r of sorted) {
+      const d = parse(r.recordDate);
+      const ym = `${d.getFullYear()} 年 ${d.getMonth() + 1} 月`;
+      if (ym !== month) {
+        month = ym;
+        const h = document.createElement('div');
+        h.className = 'month';
+        h.textContent = ym;
+        ul = document.createElement('ul');
+        ul.className = 'timeline';
+        list.append(h, ul);
+      }
+      const li = document.createElement('li');
+      li.className = 'entry';
+      li.tabIndex = 0;
+
+      const when = document.createElement('div');
+      when.className = 'when';
+      when.innerHTML = '<div class="day"></div><div class="wk"></div>';
+      when.querySelector('.day').textContent = d.getDate();
+      when.querySelector('.wk').textContent = `周${WEEK[d.getDay()]}`;
+
+      const body = document.createElement('div');
+      body.className = 'body';
+      const chips = document.createElement('div');
+      chips.className = 'chips';
+      if (r.mood) chips.append(chip(`${r.mood} · ${MOOD_WORDS[r.mood]}`, 'mood', moodColor(r.mood)));
+      const span = sleepSpan(r.sleepTime, r.wakeTime);
+      if (span) chips.append(chip(`😴 ${r.sleepTime.slice(0, 5)} → ${r.wakeTime.slice(0, 5)} · ${fmtHours(span.dur)} 时`));
+      if (r.spending != null) chips.append(chip(`¥ ${Number(r.spending).toFixed(2).replace(/\.00$/, '')}`));
+      if (r.meals) chips.append(chip(`🍜 ${r.meals}`));
+      body.append(chips);
+
+      if (span) {
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.append(document.createElement('i'));
+        paintBar(bar, r.sleepTime, r.wakeTime);
+        const ticks = document.createElement('div');
+        ticks.className = 'ticks';
+        for (const t of ['20:00', '00:00', '04:00', '08:00', '12:00', '16:00', '20:00']) {
+          ticks.append(Object.assign(document.createElement('span'), { textContent: t }));
+        }
+        body.append(bar, ticks);
+      }
+      if (r.activities) body.append(Object.assign(document.createElement('p'), { className: 'text', textContent: r.activities }));
+      if (r.note) body.append(Object.assign(document.createElement('p'), { className: 'note', textContent: r.note }));
+
+      li.append(when, body);
+      li.addEventListener('click', () => loadDate(r.recordDate, true));
+      li.addEventListener('keydown', e => { if (e.key === 'Enter') loadDate(r.recordDate, true); });
+      ul.append(li);
+    }
+  }
+
+  /* ---------- 加载 ---------- */
+  async function refresh() {
+    try {
+      const res = await fetch('/api/records');
+      const data = await res.json();
+      records = new Map(data.map(r => [r.recordDate, r]));
+    } catch {
+      toast('连不上服务器，程序启动了吗？', true);
+    }
+    renderStats();
+    renderHeat();
+    renderBands();
+    renderList();
+  }
+
+  renderHeader();
+  renderMoods();
+  $('form').addEventListener('submit', save);
+  $('deleteBtn').addEventListener('click', remove);
+  $('sleepTime').addEventListener('input', updateSleepCalc);
+  $('wakeTime').addEventListener('input', updateSleepCalc);
+  $('recordDate').addEventListener('change', () => loadDate($('recordDate').value));
+  $('prevDay').addEventListener('click', () => loadDate(addDays($('recordDate').value || todayIso(), -1)));
+  $('nextDay').addEventListener('click', () => loadDate(addDays($('recordDate').value || todayIso(), 1)));
+
+  refresh().then(() => loadDate(todayIso()));
+</script>
+</body>
+</html>
