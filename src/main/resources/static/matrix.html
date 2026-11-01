@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14120f" media="(prefers-color-scheme: dark)">
+  <title>全面发展矩阵</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    /* ---------- 布局 ---------- */
+    .layout { display: grid; gap: 16px; }
+    @media (min-width: 960px) {
+      .layout { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); align-items: start; }
+      .side { position: sticky; top: 16px; }
+    }
+    .domains { display: grid; gap: 16px; }
+    @media (min-width: 620px) { .domains { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .domains .card { margin: 0; }
+
+    /* ---------- 雷达图 ---------- */
+    .radar-wrap { display: grid; place-items: center; }
+    .radar { width: 100%; max-width: 320px; height: auto; overflow: visible; }
+    .radar .ring { fill: none; stroke: var(--line); stroke-width: 1; }
+    .radar .spoke { stroke: var(--line); stroke-width: 1; }
+    .radar .area { fill: color-mix(in srgb, var(--seal) 18%, transparent); stroke: var(--seal); stroke-width: 2; stroke-linejoin: round; }
+    .radar .dot { fill: var(--card); stroke: var(--seal); stroke-width: 2; }
+    .radar .lbl { font: 600 13px var(--sans); fill: var(--ink); }
+    .radar .val { font: 12px var(--sans); fill: var(--ink-soft); }
+    .radar .val.none { fill: var(--ink-faint); }
+    .radar .center { font: 700 30px var(--serif); fill: var(--ink); }
+    .radar .center-sub { font: 11px var(--sans); fill: var(--ink-faint); }
+    .radar-note { margin: 4px 0 0; font-size: 12px; color: var(--ink-faint); text-align: center; }
+
+    /* ---------- 分布条 ---------- */
+    .dist { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: var(--track); }
+    .dist i { display: block; height: 100%; }
+    .dist.thin { height: 6px; margin: 10px 0 4px; }
+    .dist-legend { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 12px; text-align: center; }
+    .dist-legend b { display: block; font: 700 20px/1.2 var(--serif); }
+    .dist-legend span { font-size: 12px; color: var(--ink-soft); }
+    .dist-legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; background: var(--c); vertical-align: 0; }
+
+    /* ---------- 该先改的 ---------- */
+    .focus { list-style: none; margin: 0; padding: 0; counter-reset: focus; }
+    .focus li {
+      display: grid; grid-template-columns: 26px 1fr; gap: 10px;
+      padding: 12px 0; border-top: 1px dashed var(--line); cursor: pointer;
+    }
+    .focus li:first-child { border-top: 0; padding-top: 0; }
+    .focus li::before {
+      counter-increment: focus; content: counter(focus);
+      width: 26px; height: 26px; border-radius: 50%;
+      display: grid; place-items: center;
+      font: 700 13px var(--serif); color: var(--seal); background: var(--seal-soft);
+    }
+    .focus .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .focus .name { font-weight: 600; }
+    .focus .next { margin-top: 3px; font-size: 14px; color: var(--ink-soft); }
+    .focus .next.missing { color: var(--seal); }
+    .muted { color: var(--ink-faint); font-size: 14px; margin: 0; }
+
+    /* ---------- 方面卡片 ---------- */
+    .dhead { display: flex; align-items: center; gap: 12px; }
+    .glyph {
+      flex: none; width: 40px; height: 40px; border-radius: 10px;
+      display: grid; place-items: center;
+      font: 700 21px/1 var(--serif);
+      color: var(--seal); background: var(--seal-soft);
+    }
+    .dhead .meta { flex: 1; min-width: 0; }
+    .dhead h3 { margin: 0; font: 700 17px/1.3 var(--serif); letter-spacing: .06em; }
+    .dhead p { margin: 0; font-size: 12px; color: var(--ink-faint); }
+    .score { flex: none; width: 52px; height: 52px; position: relative; }
+    .score svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .score .bg { fill: none; stroke: var(--track); stroke-width: 5; }
+    .score .fg { fill: none; stroke: var(--c, var(--seal)); stroke-width: 5; stroke-linecap: round; transition: stroke-dasharray .4s; }
+    .score span { position: absolute; inset: 0; display: grid; place-items: center; font: 700 15px var(--serif); }
+    .score span.none { font: 11px var(--sans); color: var(--ink-faint); }
+
+    .items { list-style: none; margin: 0; padding: 0; }
+    .item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 2px; border-top: 1px solid var(--line); cursor: pointer;
+    }
+    .item:hover .iname { color: var(--seal); }
+    .item .itext { flex: 1; min-width: 0; }
+    .iname { font-weight: 500; transition: color .15s; display: flex; align-items: center; gap: 6px; }
+    .idetail { font-size: 13px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pri { width: 7px; height: 7px; border-radius: 50%; background: var(--seal); flex: none; }
+    .pri.MEDIUM { background: var(--s-fair); }
+    .pri.LOW { background: var(--ink-faint); }
+
+    .tag {
+      flex: none; padding: 2px 10px; border-radius: 99px;
+      font-size: 12px; font-weight: 600;
+      color: #fff; background: var(--c);
+    }
+    .tag.none { color: var(--ink-faint); background: transparent; border: 1px dashed var(--line); font-weight: 400; }
+
+    .add {
+      width: 100%; margin-top: 10px; padding: 9px;
+      border: 1px dashed var(--line); border-radius: 10px;
+      background: transparent; color: var(--ink-soft); cursor: pointer;
+    }
+    .add:hover { color: var(--seal); border-color: var(--seal); }
+
+    /* ---------- 空状态 ---------- */
+    .welcome { text-align: center; padding: 28px 18px; }
+    .welcome .seal { margin: 0 auto 14px; width: 56px; height: 56px; font-size: 30px; }
+    .welcome h2 { justify-content: center; color: var(--ink); font: 700 20px var(--serif); }
+    .welcome p { color: var(--ink-soft); max-width: 420px; margin: 0 auto 18px; }
+    .welcome .actions { justify-content: center; flex-wrap: wrap; }
+    .welcome .primary { flex: 0 1 auto; padding: 13px 22px; }
+
+    /* ---------- 编辑弹窗 ---------- */
+    dialog {
+      width: min(560px, 100%);
+      max-height: 92vh;
+      margin: auto auto 0;
+      padding: 0;
+      border: 0; border-radius: 20px 20px 0 0;
+      background: var(--card); color: var(--ink);
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, .2);
+    }
+    @media (min-width: 620px) { dialog { margin: auto; border-radius: 20px; } }
+    dialog::backdrop { background: rgba(20, 16, 12, .45); backdrop-filter: blur(2px); }
+    dialog form { padding: 20px 18px calc(18px + env(safe-area-inset-bottom)); }
+    dialog .grip { width: 40px; height: 4px; border-radius: 99px; background: var(--line); margin: -6px auto 14px; }
+    @media (min-width: 620px) { dialog .grip { display: none; } }
+    dialog h2 { margin: 0 0 6px; font: 700 18px var(--serif); }
+    select {
+      width: 100%; padding: 11px 12px; font: inherit; color: inherit;
+      background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+      outline: none;
+    }
+    select:focus { border-color: var(--seal); box-shadow: 0 0 0 3px var(--seal-soft); }
+    .seg { display: grid; gap: 6px; }
+    .seg.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .seg.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .seg button {
+      padding: 9px 0; border-radius: 9px; cursor: pointer;
+      border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft);
+      font-size: 14px;
+    }
+    .seg button[aria-pressed="true"] { background: var(--c, var(--ink)); border-color: transparent; color: #fff; font-weight: 600; }
+    .seg.four button[aria-pressed="true"] { color: var(--paper); }
+    .seg.four button[data-v="HIGH"][aria-pressed="true"] { color: #fff; }
+    .cancel { padding: 13px 16px; border: 1px solid var(--line); border-radius: 12px; background: transparent; cursor: pointer; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="seal" aria-hidden="true">录</div>
+    <div class="title">
+      <h1>全面发展矩阵</h1>
+      <p>六个方面，看清哪里最该先补</p>
+    </div>
+    <nav class="nav" aria-label="页面">
+      <a href="/">日记</a>
+      <a href="/matrix.html" aria-current="page">矩阵</a>
+    </nav>
+  </header>
+
+  <section class="card welcome" id="welcome" hidden>
+    <div class="seal" aria-hidden="true">阵</div>
+    <h2>把自己摊开来看一看</h2>
+    <p>把人生分成身体、精神、学习、事业、社交、财务六个方面，每一项标上现状。哪里亮红灯，一眼就知道。</p>
+    <div class="actions">
+      <button type="button" class="primary" id="useTemplate">用模板开始（25 项常见内容）</button>
+      <button type="button" class="ghost" id="startBlank">自己从零添加</button>
+    </div>
+  </section>
+
+  <div class="layout" id="layout" hidden>
+    <div class="side">
+      <section class="card" aria-labelledby="radarTitle">
+        <h2 id="radarTitle">全面发展雷达 <small>满分 100</small></h2>
+        <div class="radar-wrap"><svg class="radar" id="radar" viewBox="-170 -150 340 300" role="img"></svg></div>
+        <p class="radar-note">优秀 100 · 良好 75 · 一般 50 · 较差 25，每个方面取平均；没评估的项不算</p>
+      </section>
+
+      <section class="card" aria-labelledby="distTitle">
+        <h2 id="distTitle">现状分布 <small id="distTotal"></small></h2>
+        <div class="dist" id="dist"></div>
+        <div class="dist-legend" id="distLegend"></div>
+      </section>
+
+      <section class="card" aria-labelledby="focusTitle">
+        <h2 id="focusTitle">该先改的 <small>较差、一般里按优先级排</small></h2>
+        <ol class="focus" id="focus"></ol>
+      </section>
+    </div>
+
+    <div class="domains" id="domains"></div>
+  </div>
+</main>
+
+<dialog id="editor" aria-labelledby="editorTitle">
+  <form id="form" method="dialog" novalidate>
+    <div class="grip" aria-hidden="true"></div>
+    <h2 id="editorTitle">添加一项</h2>
+
+    <div class="field">
+      <div class="pair">
+        <div><label for="domain">方面</label><select id="domain"></select></div>
+        <div><label for="name">名称</label><input id="name" maxlength="50" placeholder="比如：睡眠" required></div>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="label" id="statusLabel">现状</span>
+      <div class="seg five" id="statusSeg" role="group" aria-labelledby="statusLabel"></div>
+    </div>
+
+    <div class="field">
+      <span class="label" id="priorityLabel">改进优先级</span>
+      <div class="seg four" id="prioritySeg" role="group" aria-labelledby="priorityLabel"></div>
+    </div>
+
+    <div class="field">
+      <label for="detail">当前情况</label>
+      <textarea id="detail" maxlength="500" placeholder="用事实说话，比如：这周平均 4 点睡"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="nextStep">下一步（越小越好）</label>
+      <textarea id="nextStep" maxlength="500" placeholder="今天就能开始的一步，比如：每天 11 点起床"></textarea>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="primary" value="save">保 存</button>
+      <button type="button" class="ghost" id="deleteBtn" hidden>删除</button>
+      <button type="button" class="cancel" id="cancelBtn">取消</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  const DOMAINS = [
+    { key: 'BODY', name: '身体', glyph: '身', hint: '睡眠、饮食、运动、外表' },
+    { key: 'MIND', name: '精神', glyph: '心', hint: '情绪、压力、专注' },
+    { key: 'STUDY', name: '学习', glyph: '学', hint: '技能、知识、证书' },
+    { key: 'CAREER', name: '事业', glyph: '业', hint: '求职、项目、工作' },
+    { key: 'SOCIAL', name: '社交', glyph: '人', hint: '家人、感情、朋友' },
+    { key: 'FINANCE', name: '财务', glyph: '财', hint: '收入、支出、存款' },
+  ];
+  const STATUS = [
+    { key: 'EXCELLENT', name: '优秀', score: 4, color: 'var(--s-excellent)' },
+    { key: 'GOOD', name: '良好', score: 3, color: 'var(--s-good)' },
+    { key: 'FAIR', name: '一般', score: 2, color: 'var(--s-fair)' },
+    { key: 'POOR', name: '较差', score: 1, color: 'var(--s-poor)' },
+    { key: null, name: '未评估', score: null, color: 'var(--track)' },
+  ];
+  const PRIORITY = [
+    { key: 'HIGH', name: '高', color: 'var(--seal)' },
+    { key: 'MEDIUM', name: '中', color: 'var(--ink-soft)' },
+    { key: 'LOW', name: '低', color: 'var(--ink-faint)' },
+    { key: null, name: '不设', color: 'var(--ink-faint)' },
+  ];
+  const TEMPLATE = {
+    BODY: ['睡眠', '饮食', '运动', '体重', '皮肤'],
+    MIND: ['情绪', '压力', '专注力', '自信'],
+    STUDY: ['Java 基础', '数据结构与算法', '数据库', '计算机网络与操作系统', '毕业设计'],
+    CAREER: ['简历', '投递', '面试', '项目作品'],
+    SOCIAL: ['家人', '对象', '朋友'],
+    FINANCE: ['收入', '支出', '存款', '负债'],
+  };
+  const statusOf = key => STATUS.find(s => s.key === key) ?? STATUS[4];
+  const domainOf = key => DOMAINS.find(d => d.key === key);
+
+  let items = [];
+  let editing = null;
+  let form = { status: null, priority: null };
+
+  /* ---------- 提示 ---------- */
+  let toastTimer;
+  function toast(text, isError) {
+    const el = $('toast');
+    el.textContent = text;
+    el.className = 'toast show' + (isError ? ' error' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.className = 'toast', 2200);
+  }
+
+  /* ---------- 小工具 ---------- */
+  const svgEl = (tag, attrs = {}) => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    return el;
+  };
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  function tag(statusKey) {
+    const s = statusOf(statusKey);
+    const t = el('span', 'tag' + (s.key ? '' : ' none'), s.name);
+    if (s.key) t.style.setProperty('--c', s.color);
+    return t;
+  }
+
+  /** 一个方面的得分：已评估的项取平均，换算成 0～100；没有已评估的项返回 null */
+  function domainScore(list) {
+    const rated = list.filter(i => i.status);
+    if (!rated.length) return null;
+    return Math.round(rated.reduce((sum, i) => sum + statusOf(i.status).score, 0) / rated.length / 4 * 100);
+  }
+  const scoreColor = s => s == null ? 'var(--track)' : s >= 85 ? 'var(--s-excellent)' : s >= 65 ? 'var(--s-good)' : s >= 45 ? 'var(--s-fair)' : 'var(--s-poor)';
+
+  /* ---------- 雷达图 ---------- */
+  function renderRadar() {
+    const svg = $('radar');
+    svg.replaceChildren();
+    const R = 110;
+    const n = DOMAINS.length;
+    const pt = (i, r) => {
+      const a = -Math.PI / 2 + i * 2 * Math.PI / n;
+      return [Math.cos(a) * r, Math.sin(a) * r];
+    };
+    for (const f of [.25, .5, .75, 1]) {
+      svg.append(svgEl('polygon', { class: 'ring', points: DOMAINS.map((_, i) => pt(i, R * f).join(',')).join(' ') }));
+    }
+    DOMAINS.forEach((_, i) => {
+      const [x, y] = pt(i, R);
+      svg.append(svgEl('line', { class: 'spoke', x1: 0, y1: 0, x2: x, y2: y }));
+    });
+
+    const scores = DOMAINS.map(d => domainScore(items.filter(i => i.domain === d.key)));
+    svg.append(svgEl('polygon', { class: 'area', points: scores.map((s, i) => pt(i, R * (s ?? 0) / 100).join(',')).join(' ') }));
+    scores.forEach((s, i) => {
+      const [x, y] = pt(i, R * (s ?? 0) / 100);
+      if (s != null) svg.append(svgEl('circle', { class: 'dot', cx: x, cy: y, r: 4 }));
+      const [lx, ly] = pt(i, R + 26);
+      const anchor = Math.abs(lx) < 5 ? 'middle' : lx > 0 ? 'start' : 'end';
+      const label = svgEl('text', { class: 'lbl', x: lx, y: ly - 2, 'text-anchor': anchor });
+      label.textContent = DOMAINS[i].name;
+      const val = svgEl('text', { class: 'val' + (s == null ? ' none' : ''), x: lx, y: ly + 14, 'text-anchor': anchor });
+      val.textContent = s == null ? '待评估' : s;
+      svg.append(label, val);
+    });
+
+    const rated = scores.filter(s => s != null);
+    const overall = rated.length ? Math.round(rated.reduce((a, b) => a + b) / rated.length) : null;
+    const c = svgEl('text', { class: 'center', x: 0, y: 6, 'text-anchor': 'middle' });
+    c.textContent = overall ?? '–';
+    const cs = svgEl('text', { class: 'center-sub', x: 0, y: 24, 'text-anchor': 'middle' });
+    cs.textContent = '综合';
+    svg.append(c, cs);
+    svg.setAttribute('aria-label', '六个方面得分：' + DOMAINS.map((d, i) => `${d.name} ${scores[i] ?? '待评估'}`).join('，'));
+  }
+
+  /* ---------- 分布 ---------- */
+  function fillDist(bar, list) {
+    bar.replaceChildren();
+    if (!list.length) return;
+    for (const s of STATUS) {
+      const count = list.filter(i => (i.status ?? null) === s.key).length;
+      if (!count) continue;
+      const seg = el('i');
+      seg.style.width = `${count / list.length * 100}%`;
+      seg.style.background = s.color;
+      seg.title = `${s.name} ${count} 项`;
+      bar.append(seg);
+    }
+  }
+  function renderDist() {
+    fillDist($('dist'), items);
+    $('distTotal').textContent = `共 ${items.length} 项`;
+    const legend = $('distLegend');
+    legend.replaceChildren();
+    for (const s of STATUS) {
+      const box = el('div');
+      box.append(el('b', null, items.filter(i => (i.status ?? null) === s.key).length));
+      const label = el('span', null, s.name);
+      label.style.setProperty('--c', s.color);
+      box.append(label);
+      legend.append(box);
+    }
+  }
+
+  /* ---------- 该先改的 ---------- */
+  function renderFocus() {
+    const box = $('focus');
+    box.replaceChildren();
+    const pRank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+    const list = items
+      .filter(i => i.status === 'POOR' || i.status === 'FAIR')
+      .sort((a, b) => (pRank[a.priority] ?? 3) - (pRank[b.priority] ?? 3) || (a.status === 'POOR' ? -1 : 1) - (b.status === 'POOR' ? -1 : 1))
+      .slice(0, 5);
+    if (!list.length) {
+      box.append(el('p', 'muted', items.some(i => i.status) ? '没有"较差"或"一般"的项，保持住。' : '先给几项评个现状，这里会列出最该先改的。'));
+      return;
+    }
+    for (const i of list) {
+      const li = el('li');
+      const body = el('div');
+      const top = el('div', 'top');
+      top.append(el('span', 'name', `${domainOf(i.domain).name} · ${i.name}`), tag(i.status));
+      body.append(top);
+      body.append(i.nextStep ? el('div', 'next', `下一步：${i.nextStep}`) : el('div', 'next missing', '还没写下一步，点这里补一个 →'));
+      li.append(body);
+      li.addEventListener('click', () => openEditor(i));
+      box.append(li);
+    }
+  }
+
+  /* ---------- 方面卡片 ---------- */
+  function ring(score) {
+    const box = el('div', 'score');
+    const C = 2 * Math.PI * 20;
+    const svg = svgEl('svg', { viewBox: '0 0 52 52', 'aria-hidden': 'true' });
+    svg.append(svgEl('circle', { class: 'bg', cx: 26, cy: 26, r: 20 }));
+    const fg = svgEl('circle', { class: 'fg', cx: 26, cy: 26, r: 20, 'stroke-dasharray': `${C * (score ?? 0) / 100} ${C}` });
+    fg.style.setProperty('--c', scoreColor(score));
+    svg.append(fg);
+    box.append(svg, el('span', score == null ? 'none' : '', score ?? '待评'));
+    return box;
+  }
+
+  function renderDomains() {
+    const box = $('domains');
+    box.replaceChildren();
+    for (const d of DOMAINS) {
+      const list = items.filter(i => i.domain === d.key);
+      const score = domainScore(list);
+      const card = el('section', 'card');
+
+      const head = el('div', 'dhead');
+      const meta = el('div', 'meta');
+      meta.append(el('h3', null, d.name), el('p', null, list.length ? `${list.length} 项 · ${d.hint}` : d.hint));
+      head.append(el('div', 'glyph', d.glyph), meta, ring(score));
+      card.append(head);
+
+      const bar = el('div', 'dist thin');
+      fillDist(bar, list);
+      card.append(bar);
+
+      const ul = el('ul', 'items');
+      for (const i of list) {
+        const li = el('li', 'item');
+        li.tabIndex = 0;
+        const text = el('div', 'itext');
+        const name = el('div', 'iname');
+        if (i.priority) {
+          const dot = el('span', `pri ${i.priority}`);
+          dot.title = `优先级：${PRIORITY.find(p => p.key === i.priority).name}`;
+          name.append(dot);
+        }
+        name.append(i.name);
+        text.append(name);
+        if (i.detail) text.append(el('div', 'idetail', i.detail));
+        li.append(text, tag(i.status));
+        li.addEventListener('click', () => openEditor(i));
+        li.addEventListener('keydown', e => { if (e.key === 'Enter') openEditor(i); });
+        ul.append(li);
+      }
+      card.append(ul);
+
+      const add = el('button', 'add', `＋ 在「${d.name}」里加一项`);
+      add.type = 'button';
+      add.addEventListener('click', () => openEditor(null, d.key));
+      card.append(add);
+      box.append(card);
+    }
+  }
+
+  /* ---------- 编辑 ---------- */
+  function buildSeg(boxId, options, field) {
+    const box = $(boxId);
+    for (const o of options) {
+      const b = el('button', null, o.name);
+      b.type = 'button';
+      b.dataset.v = o.key ?? '';
+      b.style.setProperty('--c', o.color);
+      b.addEventListener('click', () => setSeg(boxId, field, o.key));
+      box.append(b);
+    }
+  }
+  function setSeg(boxId, field, value) {
+    form[field] = value;
+    for (const b of $(boxId).children) b.setAttribute('aria-pressed', String(b.dataset.v === (value ?? '')));
+  }
+
+  function openEditor(item, domainKey) {
+    editing = item;
+    $('editorTitle').textContent = item ? '修改这一项' : '添加一项';
+    $('domain').value = item?.domain ?? domainKey ?? 'BODY';
+    $('name').value = item?.name ?? '';
+    $('detail').value = item?.detail ?? '';
+    $('nextStep').value = item?.nextStep ?? '';
+    setSeg('statusSeg', 'status', item?.status ?? null);
+    setSeg('prioritySeg', 'priority', item?.priority ?? null);
+    $('deleteBtn').hidden = !item;
+    $('editor').showModal();
+    if (!item) $('name').focus();
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    const body = {
+      domain: $('domain').value,
+      name: $('name').value.trim(),
+      detail: $('detail').value.trim() || null,
+      status: form.status,
+      priority: form.priority,
+      nextStep: $('nextStep').value.trim() || null,
+    };
+    if (!body.name) { toast('名称不能为空', true); $('name').focus(); return; }
+    try {
+      const res = await fetch(editing ? `/api/items/${editing.id}` : '/api/items', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast(err.detail || '保存失败', true);
+        return;
+      }
+      $('editor').close();
+      toast(editing ? '已更新 ✓' : '已添加 ✓');
+      await refresh();
+    } catch {
+      toast('连不上服务器，程序启动了吗？', true);
+    }
+  }
+
+  async function remove() {
+    if (!editing || !confirm(`确定删除「${editing.name}」吗？`)) return;
+    const res = await fetch(`/api/items/${editing.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      $('editor').close();
+      toast('已删除');
+      await refresh();
+    } else {
+      toast('删除失败', true);
+    }
+  }
+
+  async function useTemplate() {
+    $('useTemplate').disabled = true;
+    try {
+      for (const [domain, names] of Object.entries(TEMPLATE)) {
+        for (const name of names) {
+          await fetch('/api/items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain, name }),
+          });
+        }
+      }
+      toast('填好了，挨个点开评个现状吧');
+      await refresh();
+    } catch {
+      toast('连不上服务器，程序启动了吗？', true);
+    } finally {
+      $('useTemplate').disabled = false;
+    }
+  }
+
+  /* ---------- 加载 ---------- */
+  let started = false;
+  async function refresh() {
+    try {
+      const res = await fetch('/api/items');
+      items = await res.json();
+    } catch {
+      toast('连不上服务器，程序启动了吗？', true);
+    }
+    const empty = !items.length && !started;
+    $('welcome').hidden = !empty;
+    $('layout').hidden = empty;
+    if (empty) return;
+    renderRadar();
+    renderDist();
+    renderFocus();
+    renderDomains();
+  }
+
+  for (const d of DOMAINS) {
+    const o = el('option', null, d.name);
+    o.value = d.key;
+    $('domain').append(o);
+  }
+  buildSeg('statusSeg', STATUS, 'status');
+  buildSeg('prioritySeg', PRIORITY, 'priority');
+  $('form').addEventListener('submit', save);
+  $('deleteBtn').addEventListener('click', remove);
+  $('cancelBtn').addEventListener('click', () => $('editor').close());
+  $('editor').addEventListener('click', e => { if (e.target === $('editor')) $('editor').close(); });
+  $('useTemplate').addEventListener('click', useTemplate);
+  $('startBlank').addEventListener('click', () => { started = true; refresh(); });
+
+  refresh();
+</script>
+</body>
+</html>
