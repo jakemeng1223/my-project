@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>人生数据库</title>
+  <style>
+    :root { --bg: #f6f7f9; --card: #fff; --text: #1f2328; --muted: #6b7280; --accent: #4f46e5; --border: #e5e7eb; --danger: #dc2626; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #111318; --card: #1b1e25; --text: #e6e8eb; --muted: #9aa1ab; --accent: #818cf8; --border: #2d323c; --danger: #f87171; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 22px; margin: 8px 0 16px; }
+    h2 { font-size: 17px; margin: 0 0 12px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 4px; }
+    input, textarea { width: 100%; padding: 10px; font: inherit; color: inherit; background: transparent; border: 1px solid var(--border); border-radius: 8px; }
+    textarea { min-height: 72px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button { margin-top: 16px; width: 100%; padding: 12px; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 8px; cursor: pointer; }
+    .msg { min-height: 1.5em; margin-top: 8px; font-size: 14px; }
+    .msg.error { color: var(--danger); }
+    .record { border-top: 1px solid var(--border); padding: 12px 0; cursor: pointer; }
+    .record:first-child { border-top: 0; padding-top: 0; }
+    .record .date { font-weight: 600; }
+    .record .meta { color: var(--muted); font-size: 14px; }
+    .record .text { white-space: pre-wrap; margin-top: 4px; }
+    .empty { color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>人生数据库</h1>
+
+  <form class="card" id="form">
+    <h2>记录一天</h2>
+    <label for="recordDate">日期</label>
+    <input type="date" id="recordDate" required>
+    <div class="row">
+      <div>
+        <label for="sleepTime">几点睡</label>
+        <input type="time" id="sleepTime">
+      </div>
+      <div>
+        <label for="wakeTime">几点起</label>
+        <input type="time" id="wakeTime">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="mood">情绪（1～10）</label>
+        <input type="number" id="mood" min="1" max="10" inputmode="numeric">
+      </div>
+      <div>
+        <label for="spending">开销（元）</label>
+        <input type="number" id="spending" min="0" step="0.01" inputmode="decimal">
+      </div>
+    </div>
+    <label for="meals">吃了什么</label>
+    <input type="text" id="meals" maxlength="500">
+    <label for="activities">做了什么</label>
+    <textarea id="activities" maxlength="2000"></textarea>
+    <label for="note">念头 / 备注</label>
+    <textarea id="note" maxlength="2000"></textarea>
+    <button type="submit">保存</button>
+    <div class="msg" id="msg"></div>
+  </form>
+
+  <section class="card">
+    <h2>历史记录</h2>
+    <div id="list"></div>
+  </section>
+</main>
+
+<script>
+  const fields = ['sleepTime', 'wakeTime', 'mood', 'spending', 'meals', 'activities', 'note'];
+  const $ = id => document.getElementById(id);
+
+  function today() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+
+  function showMsg(text, isError) {
+    $('msg').textContent = text;
+    $('msg').className = 'msg' + (isError ? ' error' : '');
+  }
+
+  function fillForm(record) {
+    $('recordDate').value = record.recordDate;
+    for (const f of fields) {
+      let v = record[f] ?? '';
+      if ((f === 'sleepTime' || f === 'wakeTime') && v) v = v.slice(0, 5);
+      $(f).value = v;
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function loadList() {
+    const res = await fetch('/api/records');
+    const records = await res.json();
+    const list = $('list');
+    list.replaceChildren();
+    if (records.length === 0) {
+      list.innerHTML = '<p class="empty">还没有记录，从今天开始吧。</p>';
+      return;
+    }
+    for (const r of records) {
+      const item = document.createElement('div');
+      item.className = 'record';
+      const date = document.createElement('div');
+      date.className = 'date';
+      date.textContent = r.recordDate;
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const parts = [];
+      if (r.sleepTime || r.wakeTime) parts.push(`睡 ${(r.sleepTime || '?').slice(0, 5)} → 起 ${(r.wakeTime || '?').slice(0, 5)}`);
+      if (r.mood != null) parts.push(`情绪 ${r.mood}`);
+      if (r.spending != null) parts.push(`开销 ¥${r.spending}`);
+      meta.textContent = parts.join(' · ');
+      const text = document.createElement('div');
+      text.className = 'text';
+      text.textContent = r.activities || r.note || '';
+      item.append(date, meta, text);
+      item.addEventListener('click', () => fillForm(r));
+      list.append(item);
+    }
+  }
+
+  $('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const body = {};
+    for (const f of fields) {
+      const v = $(f).value.trim();
+      body[f] = v === '' ? null : v;
+    }
+    const res = await fetch(`/api/records/${$('recordDate').value}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      showMsg('已保存 ✅');
+      loadList();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showMsg(err.detail || '保存失败', true);
+    }
+  });
+
+  $('recordDate').value = today();
+  loadList();
+</script>
+</body>
+</html>
