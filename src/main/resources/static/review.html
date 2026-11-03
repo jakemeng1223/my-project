@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14120f" media="(prefers-color-scheme: dark)">
+  <title>每周复盘</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    /* ---------- 周切换 ---------- */
+    .weekbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .weekbar button {
+      flex: none; height: 40px; min-width: 40px; padding: 0 12px;
+      border: 1px solid var(--line); border-radius: 10px;
+      background: var(--card); cursor: pointer; font-size: 15px;
+    }
+    .weekbar button:disabled { opacity: .35; cursor: default; }
+    .weekbar .label { flex: 1; margin: 0; text-align: center; font: 600 16px var(--serif); color: var(--ink); letter-spacing: .04em; }
+    .weekbar .label small { display: block; font: 400 12px var(--sans); color: var(--ink-faint); letter-spacing: 0; }
+
+    /* ---------- 一句话总结 ---------- */
+    .verdict { position: relative; overflow: hidden; }
+    .verdict p { margin: 0; font: 600 20px/1.6 var(--serif); letter-spacing: .02em; }
+    .verdict p b { color: var(--seal); }
+    .verdict .stamp {
+      position: absolute; right: 14px; top: 10px;
+      font: 700 13px var(--serif); color: var(--seal);
+      border: 2px solid var(--seal); border-radius: 6px; padding: 2px 8px;
+      transform: rotate(8deg); opacity: .75; letter-spacing: .2em;
+    }
+    .verdict .stamp ~ p { padding-right: 70px; }
+
+    /* ---------- 指标 ---------- */
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi:first-child { grid-column: span 2; } }
+    .kpi { padding: 12px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); min-width: 0; }
+    .kpi span { font-size: 12px; color: var(--ink-soft); }
+    .kpi b { display: block; font: 700 26px/1.2 var(--serif); margin: 2px 0; white-space: nowrap; }
+    .kpi b em { font: 400 13px var(--sans); font-style: normal; color: var(--ink-soft); margin-left: 2px; }
+    .delta { font-size: 12px; color: var(--ink-faint); }
+    .delta.good { color: var(--s-excellent); }
+    .delta.bad { color: var(--s-poor); }
+
+    /* ---------- 夜晚 ---------- */
+    .nights { list-style: none; margin: 0; padding: 0; }
+    .night { display: grid; grid-template-columns: 54px 1fr 92px; align-items: center; gap: 10px; padding: 7px 0; }
+    .night + .night { border-top: 1px dashed var(--line); }
+    .night .d { font-size: 13px; color: var(--ink-soft); line-height: 1.2; }
+    .night .d b { display: block; font: 600 15px var(--serif); color: var(--ink); }
+    .night .t { font-size: 12px; color: var(--ink-soft); text-align: right; line-height: 1.3; }
+    .night .t b { display: block; color: var(--ink); font-size: 13px; }
+    .lane { position: relative; height: 14px; border-radius: 99px; background: var(--track); }
+    .lane i { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: var(--sleep); }
+    .lane i.late { background: var(--seal); }
+    .lane .goal { position: absolute; top: -4px; bottom: -4px; border-left: 1.5px dashed var(--seal); opacity: .6; }
+    .lane.none { background: repeating-linear-gradient(45deg, var(--track) 0 4px, transparent 4px 8px); }
+    .night .t.none { color: var(--ink-faint); }
+    .lane-axis { display: grid; grid-template-columns: 54px 1fr 92px; gap: 10px; font-size: 10px; color: var(--ink-faint); margin-top: 4px; }
+    .lane-axis div { position: relative; height: 14px; }
+    .lane-axis div span { position: absolute; transform: translateX(-50%); }
+    .lane-axis div span:first-child { transform: none; }
+    @media (max-width: 520px) { .lane-axis div span:nth-child(2n) { display: none; } }
+
+    /* ---------- 图表 ---------- */
+    .chart { position: relative; }
+    .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .chart .grid line { stroke: var(--line); stroke-width: 1; }
+    .chart .grid text, .chart .x text { fill: var(--ink-faint); font-size: 11px; }
+    .chart .line { fill: none; stroke: var(--seal); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+    .chart .dot { fill: var(--seal); stroke: var(--card); stroke-width: 2; }
+    .chart .val { fill: var(--ink); font-size: 12px; font-weight: 600; }
+    .chart .hit { fill: transparent; cursor: pointer; }
+    .chart .bar { fill: var(--ink-faint); }
+    .chart .bar.top { fill: var(--seal); }
+    .chart .focus { stroke: var(--ink-faint); stroke-dasharray: 3 3; }
+    .tip {
+      position: absolute; pointer-events: none; z-index: 2;
+      padding: 6px 10px; border-radius: 8px;
+      background: var(--ink); color: var(--paper);
+      font-size: 12px; line-height: 1.5; white-space: nowrap;
+      transform: translate(-50%, calc(-100% - 10px));
+      opacity: 0; transition: opacity .12s;
+    }
+    .tip.show { opacity: 1; }
+    .sum { display: flex; gap: 18px; margin-bottom: 10px; flex-wrap: wrap; font-size: 13px; color: var(--ink-soft); }
+    .sum b { font: 700 18px var(--serif); color: var(--ink); margin-right: 3px; }
+
+    /* ---------- 发现 ---------- */
+    .finds { list-style: none; margin: 0; padding: 0; counter-reset: f; }
+    .finds li { position: relative; padding: 8px 0 8px 32px; border-top: 1px dashed var(--line); font-size: 15px; }
+    .finds li:first-child { border-top: 0; }
+    .finds li::before {
+      counter-increment: f; content: counter(f);
+      position: absolute; left: 0; top: 9px;
+      width: 22px; height: 22px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--seal-soft); color: var(--seal);
+      font: 700 12px var(--serif);
+    }
+    .finds li small { display: block; color: var(--ink-faint); font-size: 12px; }
+    .ai-row { display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap; }
+    .ai-row .primary { flex: none; padding: 12px 20px; }
+    .ai-row span { font-size: 12px; color: var(--ink-faint); flex: 1; min-width: 160px; }
+
+    .two { display: grid; gap: 16px; }
+    .two > * { min-width: 0; }
+    .two > .card + .card { margin-top: 0; }
+    @media (min-width: 900px) { .two { grid-template-columns: 1fr 1fr; align-items: start; } }
+    .stack > * + * { margin-top: 16px; }
+
+    .empty { text-align: center; padding: 22px 8px; color: var(--ink-soft); }
+    .empty a { color: var(--seal); }
+  </style>
+</head>
+<body>
+<main class="stack">
+  <header>
+    <div class="seal" aria-hidden="true">复</div>
+    <div class="title">
+      <h1>每周复盘</h1>
+      <p>一周看一次，只改一件事</p>
+    </div>
+    <nav class="nav" aria-label="页面">
+      <a href="/">日记</a>
+      <a href="/review.html" aria-current="page">复盘</a>
+      <a href="/matrix.html">矩阵</a>
+    </nav>
+  </header>
+
+  <div class="weekbar">
+    <button type="button" id="prevWeek" aria-label="上一周">‹</button>
+    <h2 class="label" id="weekLabel" aria-live="polite"></h2>
+    <button type="button" id="nextWeek" aria-label="下一周">›</button>
+    <button type="button" id="thisWeek">本周</button>
+  </div>
+
+  <section class="card verdict" aria-label="一句话总结">
+    <span class="stamp" id="stamp" hidden></span>
+    <p id="verdict">正在读取记录……</p>
+  </section>
+
+  <section class="card" aria-labelledby="kpiTitle">
+    <h2 id="kpiTitle">这一周 <small>和上一周比</small></h2>
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <div class="two">
+    <section class="card" aria-labelledby="nightTitle">
+      <h2 id="nightTitle">七个夜晚 <small>虚线是 23:30 目标</small></h2>
+      <ul class="nights" id="nights"></ul>
+      <div class="lane-axis" aria-hidden="true"><span></span><div><span style="left:0">20:00</span><span style="left:33.33%">04:00</span><span style="left:50%">08:00</span><span style="left:66.67%">12:00</span><span style="left:83.33%">16:00</span></div><span></span></div>
+    </section>
+
+    <div class="stack">
+      <section class="card" aria-labelledby="moodTitle">
+        <h2 id="moodTitle">情绪走势 <small>近 8 周的周平均</small></h2>
+        <div class="chart" id="moodChart"></div>
+      </section>
+      <section class="card" aria-labelledby="moneyTitle">
+        <h2 id="moneyTitle">钱花在哪天 <small>单位：元</small></h2>
+        <div class="sum" id="moneySum"></div>
+        <div class="chart" id="moneyChart"></div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card" aria-labelledby="findTitle">
+    <h2 id="findTitle">本周发现 <small>根据记录自动整理</small></h2>
+    <ol class="finds" id="finds"></ol>
+    <div class="ai-row">
+      <button type="button" class="primary" id="copyAi">复制给 AI 分析</button>
+      <span>复制成表格，粘贴给 Claude，说一句"周报"就行</span>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+  const GOAL = 23 * 60 + 30;          // 目标入睡 23:30
+  const AXIS_START = 20 * 60;         // 夜晚条从 20:00 开始，画 24 小时
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  let records = new Map();
+  let weekStart;                      // 当前查看那周的周一
+
+  /* ---------- 日期工具 ---------- */
+  const pad = n => String(n).padStart(2, '0');
+  const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
+  const mondayOf = s => { const d = parse(s); return addDays(s, -((d.getDay() + 6) % 7)); };
+  const md = s => { const d = parse(s); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  const weekNo = s => {
+    const d = parse(addDays(s, 3));   // ISO 周：看这周的周四在哪一年
+    const jan1 = new Date(d.getFullYear(), 0, 1);
+    return Math.floor((d - jan1) / 864e5 / 7) + 1;
+  };
+  const hm = t => t ? String(t).slice(0, 5) : '';
+  const minutes = t => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const clock = m => `${pad(Math.floor(m / 60) % 24)}:${pad(Math.round(m % 60))}`;
+  // 中午以前入睡算"第二天凌晨"，加 24 小时再平均，避免 23:00 和 01:00 平均成 12:00
+  const nightMin = m => m < 12 * 60 ? m + 1440 : m;
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+
+  function span(r) {
+    const s = minutes(r.sleepTime), w = minutes(r.wakeTime);
+    if (s == null || w == null) return null;
+    let dur = w - s;
+    if (dur <= 0) dur += 1440;
+    return { start: s, dur };
+  }
+
+  /* ---------- 每周统计 ---------- */
+  function weekStats(monday) {
+    const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+    const list = days.map(d => records.get(d)).filter(Boolean);
+    const spans = list.map(span).filter(Boolean);
+    const moods = list.map(r => r.mood).filter(m => m != null);
+    const money = list.map(r => r.spending).filter(v => v != null).map(Number);
+    const onset = avg(spans.map(s => nightMin(s.start)));
+    return {
+      days, list,
+      count: list.length,
+      onset,
+      sleep: avg(spans.map(s => s.dur)),
+      mood: avg(moods),
+      money: money.length ? money.reduce((a, b) => a + b, 0) : null,
+      late: spans.filter(s => nightMin(s.start) >= 27 * 60).length,
+      goalNights: spans.filter(s => nightMin(s.start) <= GOAL).length,
+    };
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render() {
+    const today = iso(new Date());
+    const cur = weekStats(weekStart);
+    const prev = weekStats(addDays(weekStart, -7));
+    const end = addDays(weekStart, 6);
+    const isThis = weekStart === mondayOf(today);
+
+    $('weekLabel').innerHTML = '';
+    $('weekLabel').append(`第 ${weekNo(weekStart)} 周`, Object.assign(document.createElement('small'), {
+      textContent: `${md(weekStart)} – ${md(end)}${isThis ? ' · 本周' : ''}`
+    }));
+    $('nextWeek').disabled = isThis;
+    $('thisWeek').hidden = isThis;
+
+    renderVerdict(cur, prev, isThis);
+    renderKpis(cur, prev);
+    renderNights(cur, today);
+    renderMood();
+    renderMoney(cur);
+    renderFinds(cur, prev);
+  }
+
+  function renderVerdict(cur, prev, isThis) {
+    const el = $('verdict');
+    const stamp = $('stamp');
+    stamp.hidden = true;
+    if (!cur.count) {
+      el.innerHTML = isThis ? '这周还没有记录。<a href="/">去记今天的第一笔 →</a>' : '这一周没有记录。';
+      return;
+    }
+    const parts = [`这周记了 <b>${cur.count}</b> 天`];
+    if (cur.onset != null) {
+      let s = `平均 <b>${clock(cur.onset)}</b> 入睡`;
+      if (prev.onset != null) {
+        const diff = Math.round(cur.onset - prev.onset);
+        if (Math.abs(diff) >= 10) s += `，比上周${diff < 0 ? '早' : '晚'} ${Math.abs(diff)} 分钟`;
+        else s += '，和上周差不多';
+      }
+      parts.push(s);
+    }
+    if (cur.mood != null) parts.push(`情绪 <b>${cur.mood.toFixed(1)}</b> 分`);
+    el.innerHTML = parts.join('，') + '。';
+    if (cur.onset != null && cur.onset <= GOAL) { stamp.textContent = '达标'; stamp.hidden = false; }
+    else if (cur.count === 7) { stamp.textContent = '全勤'; stamp.hidden = false; }
+  }
+
+  function kpi(label, value, unit, delta) {
+    const box = document.createElement('div');
+    box.className = 'kpi';
+    const b = document.createElement('b');
+    b.append(value);
+    if (unit) b.append(Object.assign(document.createElement('em'), { textContent: unit }));
+    const d = Object.assign(document.createElement('div'), { className: 'delta ' + (delta?.cls || ''), textContent: delta?.text || '上周无数据' });
+    box.append(Object.assign(document.createElement('span'), { textContent: label }), b, d);
+    return box;
+  }
+
+  // 比较两个数。betterWhenLower：数越小越好（比如入睡时间、花钱）
+  function compare(cur, prev, fmt, betterWhenLower, sameWithin) {
+    if (cur == null || prev == null) return null;
+    const diff = cur - prev;
+    if (Math.abs(diff) <= sameWithin) return { text: '和上周持平', cls: '' };
+    const good = betterWhenLower ? diff < 0 : diff > 0;
+    return { text: `${diff > 0 ? '▲' : '▼'} ${fmt(Math.abs(diff))}`, cls: good ? 'good' : 'bad' };
+  }
+
+  function renderKpis(cur, prev) {
+    const box = $('kpis');
+    box.replaceChildren(
+      kpi('记录天数', String(cur.count), '/ 7', compare(cur.count, prev.count, v => `${v} 天`, false, 0)),
+      kpi('平均入睡', cur.onset != null ? clock(cur.onset) : '–', '',
+        compare(cur.onset, prev.onset, v => `${Math.round(v)} 分钟`, true, 9)),
+      kpi('平均睡眠', cur.sleep != null ? (cur.sleep / 60).toFixed(1) : '–', cur.sleep != null ? '时' : '',
+        compare(cur.sleep, prev.sleep, v => `${(v / 60).toFixed(1)} 时`, false, 9)),
+      kpi('平均情绪', cur.mood != null ? cur.mood.toFixed(1) : '–', cur.mood != null ? '分' : '',
+        compare(cur.mood, prev.mood, v => v.toFixed(1), false, 0.2)),
+      kpi('本周开销', cur.money != null ? Math.round(cur.money).toLocaleString() : '–', cur.money != null ? '元' : '',
+        compare(cur.money, prev.money, v => `${Math.round(v)} 元`, true, 0)),
+    );
+  }
+
+  const pct = m => ((m - AXIS_START + 1440) % 1440) / 1440 * 100;
+
+  function renderNights(cur, today) {
+    const ul = $('nights');
+    ul.replaceChildren();
+    cur.days.forEach(date => {
+      const r = records.get(date);
+      const s = r && span(r);
+      const li = document.createElement('li');
+      li.className = 'night';
+      const d = document.createElement('div');
+      d.className = 'd';
+      d.append(Object.assign(document.createElement('b'), { textContent: '周' + WEEK[parse(date).getDay()] }), md(date));
+
+      const lane = document.createElement('div');
+      lane.className = 'lane' + (s ? '' : ' none');
+      const goal = Object.assign(document.createElement('span'), { className: 'goal' });
+      goal.style.left = pct(GOAL) + '%';
+      lane.append(goal);
+      const t = document.createElement('div');
+      t.className = 't';
+      if (s) {
+        const i = document.createElement('i');
+        const left = pct(s.start);
+        i.style.left = left + '%';
+        i.style.width = Math.min(s.dur / 1440 * 100, 100 - left) + '%';
+        if (nightMin(s.start) >= 27 * 60) i.className = 'late';
+        lane.append(i);
+        lane.title = `${date} ${hm(r.sleepTime)}–${hm(r.wakeTime)}，${(s.dur / 60).toFixed(1)} 小时`;
+        t.append(Object.assign(document.createElement('b'), { textContent: `${hm(r.sleepTime)}–${hm(r.wakeTime)}` }), `${(s.dur / 60).toFixed(1)} 小时`);
+      } else {
+        t.classList.add('none');
+        t.textContent = date > today ? '还没到' : r ? '没填睡眠' : '没记录';
+      }
+      li.append(d, lane, t);
+      ul.append(li);
+    });
+  }
+
+  /* ---------- 小工具：SVG 和悬停提示 ---------- */
+  function el(tag, attrs = {}, text) {
+    const n = document.createElementNS(SVG, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function tipFor(box) {
+    let tip = box.querySelector('.tip');
+    if (!tip) { tip = Object.assign(document.createElement('div'), { className: 'tip' }); box.append(tip); }
+    return {
+      show(x, y, html) {
+        const w = box.clientWidth;
+        tip.innerHTML = html;
+        tip.style.left = Math.max(60, Math.min(w - 60, x)) + 'px';
+        tip.style.top = y + 'px';
+        tip.classList.add('show');
+      },
+      hide() { tip.classList.remove('show'); }
+    };
+  }
+  // 把 viewBox 坐标换成容器里的像素坐标
+  const toPx = (svg, x, y) => { const k = svg.clientWidth / svg.viewBox.baseVal.width; return [x * k, y * k]; };
+
+  function renderMood() {
+    const box = $('moodChart');
+    box.replaceChildren();
+    const W = Math.max(300, box.clientWidth || 480), H = 200, L = 26, R = 30, T = 16, B = 26;
+    const weeks = Array.from({ length: 8 }, (_, i) => addDays(weekStart, (i - 7) * 7));
+    const pts = weeks.map(w => ({ w, v: weekStats(w).mood }));
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '近 8 周情绪周平均折线图' });
+    const x = i => L + i * (W - L - R) / 7;
+    const y = v => T + (10 - v) / 9 * (H - T - B);
+
+    const grid = el('g', { class: 'grid' });
+    [1, 4, 7, 10].forEach(v => {
+      grid.append(el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+      grid.append(el('text', { x: L - 8, y: y(v) + 4, 'text-anchor': 'end' }, v));
+    });
+    svg.append(grid);
+    const xs = el('g', { class: 'x' });
+    weeks.forEach((w, i) => xs.append(el('text', { x: x(i), y: H - 6, 'text-anchor': 'middle' }, i === 7 ? '这周' : md(w))));
+    svg.append(xs);
+
+    const has = pts.map((p, i) => ({ ...p, i })).filter(p => p.v != null);
+    if (!has.length) {
+      svg.append(el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'val', fill: 'var(--ink-faint)' }, '还没有情绪记录'));
+      box.append(svg);
+      return;
+    }
+    // 中间缺的周断开，不硬连
+    let d = '';
+    has.forEach((p, k) => { d += (k && has[k - 1].i === p.i - 1 ? 'L' : 'M') + x(p.i) + ' ' + y(p.v); });
+    svg.append(el('path', { d, class: 'line' }));
+    const focus = el('line', { class: 'focus', y1: T, y2: H - B, visibility: 'hidden' });
+    svg.append(focus);
+    has.forEach(p => svg.append(el('circle', { cx: x(p.i), cy: y(p.v), r: p.i === 7 ? 6 : 4.5, class: 'dot' })));
+    const last = has[has.length - 1];
+    svg.append(el('text', { x: x(last.i) + 10, y: y(last.v) + 4, class: 'val' }, last.v.toFixed(1)));
+
+    const tip = tipFor(box);
+    weeks.forEach((w, i) => {
+      const hit = el('rect', { x: x(i) - (W - L - R) / 14, y: T, width: (W - L - R) / 7, height: H - T - B, class: 'hit' });
+      const p = pts[i];
+      const on = () => {
+        focus.setAttribute('x1', x(i)); focus.setAttribute('x2', x(i)); focus.setAttribute('visibility', 'visible');
+        const [px, py] = toPx(svg, x(i), p.v != null ? y(p.v) : T + 20);
+        tip.show(px, py, `${md(w)} 那周<br>${p.v != null ? `情绪平均 <b>${p.v.toFixed(1)}</b>` : '没有情绪记录'}`);
+      };
+      const off = () => { focus.setAttribute('visibility', 'hidden'); tip.hide(); };
+      hit.addEventListener('pointerenter', on);
+      hit.addEventListener('pointerleave', off);
+      svg.append(hit);
+    });
+    box.append(svg);
+  }
+
+  function renderMoney(cur) {
+    const box = $('moneyChart');
+    box.replaceChildren();
+    const vals = cur.days.map(d => { const r = records.get(d); return r && r.spending != null ? Number(r.spending) : null; });
+    const known = vals.filter(v => v != null);
+    const sum = $('moneySum');
+    sum.replaceChildren();
+    if (known.length) {
+      const total = known.reduce((a, b) => a + b, 0);
+      const s1 = document.createElement('span'); s1.append(Object.assign(document.createElement('b'), { textContent: Math.round(total) }), '元 合计');
+      const s2 = document.createElement('span'); s2.append(Object.assign(document.createElement('b'), { textContent: Math.round(total / known.length) }), `元 日均（${known.length} 天有数）`);
+      sum.append(s1, s2);
+    }
+
+    const W = Math.max(300, box.clientWidth || 480), H = 170, L = 8, R = 8, T = 22, B = 24;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '本周每天开销柱状图' });
+    const max = Math.max(...known, 1);
+    const slot = (W - L - R) / 7, bw = Math.min(30, slot * 0.5);
+    const top = known.length ? Math.max(...known) : null;
+    svg.append(el('line', { x1: L, x2: W - R, y1: H - B, y2: H - B, stroke: 'var(--line)' }));
+    const tip = tipFor(box);
+    vals.forEach((v, i) => {
+      const cx = L + slot * (i + .5);
+      svg.append(el('text', { x: cx, y: H - 6, 'text-anchor': 'middle', fill: 'var(--ink-faint)', 'font-size': 11 }, '周' + WEEK[parse(cur.days[i]).getDay()]));
+      const hit = el('rect', { x: cx - slot / 2, y: T - 18, width: slot, height: H - B - T + 18, class: 'hit' });
+      if (v != null) {
+        const h = Math.max(v / max * (H - T - B), v > 0 ? 3 : 0);
+        // 顶部圆角、底部贴着基线
+        const r = Math.min(4, h);
+        const x0 = cx - bw / 2, y0 = H - B - h;
+        const path = `M${x0} ${H - B} V${y0 + r} Q${x0} ${y0} ${x0 + r} ${y0} H${x0 + bw - r} Q${x0 + bw} ${y0} ${x0 + bw} ${y0 + r} V${H - B} Z`;
+        svg.append(hit, el('path', { d: path, class: 'bar' + (v === top && known.length > 1 ? ' top' : '') }));
+        if (v === top) svg.append(el('text', { x: cx, y: y0 - 6, 'text-anchor': 'middle', class: 'val', fill: 'var(--ink)', 'font-size': 12, 'font-weight': 600 }, Math.round(v)));
+      } else {
+        svg.append(hit, el('text', { x: cx, y: H - B - 6, 'text-anchor': 'middle', fill: 'var(--ink-faint)', 'font-size': 11 }, '–'));
+      }
+      hit.addEventListener('pointerenter', () => {
+        const [px, py] = toPx(svg, cx, v != null ? H - B - Math.max(v / max * (H - T - B), 3) : H - B - 14);
+        const r = records.get(cur.days[i]);
+        tip.show(px, py, `${md(cur.days[i])} 周${WEEK[parse(cur.days[i]).getDay()]}<br>${v != null ? `花了 <b>${v}</b> 元` : '没填开销'}${r?.meals ? '<br>' + escapeHtml(r.meals).slice(0, 24) : ''}`);
+      });
+      hit.addEventListener('pointerleave', tip.hide);
+    });
+    if (!known.length) svg.append(el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', fill: 'var(--ink-faint)', 'font-size': 13 }, '这周还没填开销'));
+    box.append(svg);
+  }
+
+  const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function renderFinds(cur, prev) {
+    const ol = $('finds');
+    ol.replaceChildren();
+    const add = (text, sub) => {
+      const li = document.createElement('li');
+      li.append(text);
+      if (sub) li.append(Object.assign(document.createElement('small'), { textContent: sub }));
+      ol.append(li);
+    };
+    if (!cur.count) { add('这周还没有记录，没什么可总结的。', '先每天记一笔，下周就有东西看了'); return; }
+
+    const withSpan = cur.list.map(r => ({ r, s: span(r) })).filter(x => x.s);
+    if (withSpan.length) {
+      const latest = withSpan.reduce((a, b) => nightMin(b.s.start) > nightMin(a.s.start) ? b : a);
+      const earliest = withSpan.reduce((a, b) => nightMin(b.s.start) < nightMin(a.s.start) ? b : a);
+      add(`最晚的一晚是周${WEEK[parse(latest.r.recordDate).getDay()]}，${hm(latest.r.sleepTime)} 才睡。`,
+        cur.late ? `凌晨 3 点后入睡 ${cur.late} 次；23:30 前入睡 ${cur.goalNights} 次` : `23:30 前入睡 ${cur.goalNights} 次`);
+      if (earliest !== latest) add(`最早的一晚是周${WEEK[parse(earliest.r.recordDate).getDay()]}，${hm(earliest.r.sleepTime)} 入睡。`, '那天做对了什么？值得复制');
+    }
+    const moods = cur.list.filter(r => r.mood != null);
+    if (moods.length >= 2) {
+      const best = moods.reduce((a, b) => b.mood > a.mood ? b : a);
+      const worst = moods.reduce((a, b) => b.mood < a.mood ? b : a);
+      if (best.mood !== worst.mood) {
+        add(`情绪最好是周${WEEK[parse(best.recordDate).getDay()]}（${best.mood} 分），最低是周${WEEK[parse(worst.recordDate).getDay()]}（${worst.mood} 分）。`,
+          best.activities ? `好的那天做了：${best.activities.slice(0, 40)}` : '');
+      }
+    }
+    const missing = cur.days.filter(d => d <= iso(new Date()) && !records.has(d));
+    if (missing.length) add(`有 ${missing.length} 天没记：${missing.map(d => '周' + WEEK[parse(d).getDay()]).join('、')}。`, '最低标准一句话也行：情绪几分 + 今天做成的一件小事');
+    else if (cur.count === 7) add('七天全记了，连续性满分。');
+    if (cur.money != null && prev.money != null && prev.money > 0) {
+      const r = (cur.money - prev.money) / prev.money;
+      if (Math.abs(r) >= 0.2) add(`开销比上周${r > 0 ? '多' : '少'}了 ${Math.round(Math.abs(r) * 100)}%。`, `${Math.round(prev.money)} → ${Math.round(cur.money)} 元`);
+    }
+  }
+
+  /* ---------- 复制给 AI ---------- */
+  function markdown() {
+    const cur = weekStats(weekStart);
+    const lines = [`# 第 ${weekNo(weekStart)} 周（${weekStart} ～ ${addDays(weekStart, 6)}）记录`, '',
+      '| 日期 | 入睡 | 起床 | 时长 | 情绪 | 开销 | 吃了什么 | 做了什么 | 备注 |', '|---|---|---|---|---|---|---|---|---|'];
+    const cell = v => v == null || v === '' ? '' : String(v).replace(/\|/g, '/').replace(/\n/g, ' ');
+    cur.days.forEach(d => {
+      const r = records.get(d);
+      if (!r) { lines.push(`| ${d} 周${WEEK[parse(d).getDay()]} | 未记录 ||||||||`); return; }
+      const s = span(r);
+      lines.push(`| ${d} 周${WEEK[parse(d).getDay()]} | ${hm(r.sleepTime)} | ${hm(r.wakeTime)} | ${s ? (s.dur / 60).toFixed(1) + 'h' : ''} | ${cell(r.mood)} | ${cell(r.spending)} | ${cell(r.meals)} | ${cell(r.activities)} | ${cell(r.note)} |`);
+    });
+    lines.push('', `汇总：记录 ${cur.count}/7 天；平均入睡 ${cur.onset != null ? clock(cur.onset) : '无'}；平均睡眠 ${cur.sleep != null ? (cur.sleep / 60).toFixed(1) + 'h' : '无'}；平均情绪 ${cur.mood != null ? cur.mood.toFixed(1) : '无'}；开销 ${cur.money != null ? Math.round(cur.money) + ' 元' : '无'}`,
+      '', '请帮我做周报：这周最大的问题是什么？下周只改一件事，改什么？');
+    return lines.join('\n');
+  }
+
+  async function copyAi() {
+    const text = markdown();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // 局域网 http 访问时没有剪贴板权限，退回老办法
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.append(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (!ok) { toast('复制失败，请换个浏览器试试', true); return; }
+    }
+    toast('已复制，去粘贴给 Claude 吧');
+  }
+
+  let toastTimer;
+  function toast(text, isError) {
+    const t = $('toast');
+    t.textContent = text;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.className = 'toast', 2200);
+  }
+
+  /* ---------- 启动 ---------- */
+  function go(monday) {
+    weekStart = monday;
+    const url = new URL(location);
+    url.searchParams.set('week', monday);
+    history.replaceState(null, '', url);
+    render();
+  }
+
+  $('prevWeek').addEventListener('click', () => go(addDays(weekStart, -7)));
+  $('nextWeek').addEventListener('click', () => go(addDays(weekStart, 7)));
+  $('thisWeek').addEventListener('click', () => go(mondayOf(iso(new Date()))));
+  $('copyAi').addEventListener('click', copyAi);
+  // 图表按容器实际宽度画，文字始终是真实字号；窗口变宽变窄时重画
+  let lastW = 0;
+  new ResizeObserver(() => {
+    const w = $('moodChart').clientWidth;
+    if (weekStart && Math.abs(w - lastW) > 8) { lastW = w; renderMood(); renderMoney(weekStats(weekStart)); }
+  }).observe($('moodChart'));
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input, textarea')) return;
+    if (e.key === 'ArrowLeft') $('prevWeek').click();
+    if (e.key === 'ArrowRight' && !$('nextWeek').disabled) $('nextWeek').click();
+  });
+
+  (async () => {
+    const asked = new URLSearchParams(location.search).get('week');
+    weekStart = mondayOf(asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : iso(new Date()));
+    try {
+      const res = await fetch('/api/records');
+      if (!res.ok) throw new Error(res.status);
+      records = new Map((await res.json()).map(r => [r.recordDate, r]));
+    } catch {
+      toast('读取记录失败，确认后端已经启动', true);
+    }
+    go(weekStart);
+  })();
+</script>
+</body>
+</html>
